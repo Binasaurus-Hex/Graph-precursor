@@ -5,6 +5,7 @@ b:int;
 b = 4;
 
 name:string;
+name = "hello world";
 
 {
 	c:float;

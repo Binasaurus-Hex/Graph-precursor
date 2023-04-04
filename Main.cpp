@@ -12,31 +12,84 @@ std::string get_file_contents_as_text(const std::string filename) {
 	return contents;
 }
 
-std::string text_from_tokens(std::vector<Token>& tokens, std::string& program_text) {
-	std::string text = "";
+struct StringView {
+	const char* start;
+	int length;
+
+	bool operator == (StringView& other) {
+		if (length != other.length)return false;
+
+		for (int i = 0; i < length; i++) {
+			char a = *(start + i);
+			char b = *(other.start + i);
+
+			if (a != b) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void print(std::ostream& stream) const {
+		for (int i = 0; i < length; i++) {
+			char c = *(start + i);
+			stream << c;
+		}
+	}
+};
+
+StringView get_string_view(const Token& token, const std::string& program_text) {
+	return StringView{ &(program_text[token.start_index]), token.end_index - token.start_index };
+}
+
+std::ostream& operator <<(std::ostream& stream, const StringView view) {
+	view.print(stream);
+	return stream;
+}
+
+void print_tokens(std::ostream& stream, std::vector<Token>& tokens, std::string& program_text) {
 	for (Token& token : tokens) {
 		if (token.type == TokenType::IDENTIFIER) {
 			for (int i = 0; i < (token.end_index - token.start_index); i++) {
-				text += "?";
+				stream << "?";
 			}
 		}
 		else {
-			text += program_text.substr(token.start_index, token.end_index - token.start_index);
+			if (token.start_index > 0 && token.end_index < program_text.size())
+				stream << get_string_view(token, program_text);
 		}
 	}
-	return text;
 }
 
-bool is_number(std::string text) {
+bool is_number(const char c) {
 	const int zero = int('0');
 	const int nine = int('9');
+	return c >= zero && c <= nine;
+}
 
-	for (char c : text) {
-		if (c < zero || c > nine) {
-			return false;
-		}
+bool is_number(StringView& string_view) {
+	for (int i = 0; i < string_view.length; i++) {
+		char c = *(string_view.start + i);
+		if (!is_number(c))return false;
 	}
 	return true;
+}
+
+void comp() {
+	const std::string source_a = "hello world";
+	const std::string source_b = "welcome to hell";
+
+	StringView view_a{&source_a[0], 4};
+	StringView view_b{&source_b[11], 4};
+
+	std::cout << "hello world " << view_a << " " << view_b << std::endl;
+
+	if (view_a == view_b) {
+		std::cout << "views are equal" << std::endl;
+	}
+	else {
+		std::cout << "views are not equal" << std::endl;
+	}
 }
 
 enum class NodeType {
@@ -118,8 +171,13 @@ SyntaxNode* parse_expression() {
 	SyntaxNode* expression = new SyntaxNode();
 	Token* integer = tokenizer.next_token(); // just eat one token to fix the parsing for now
 	if (integer->type != TokenType::IDENTIFIER) {
-		std::cout << "theres an issue" << std::endl;
+		std::cout << "theres an issue";
+		if (integer->type == TokenType::STRING_LITERAL) {
+			std::cout << " ...actually dw its a string";
+		}
+		std::cout << std::endl;
 	}
+
 	expression->type = NodeType::INTEGER_LITERAL;
 	expression->identifier_value = tokenizer.get_identifier_name(*integer);
 	return expression;
@@ -202,6 +260,7 @@ SyntaxNode* parse_statement() {
 	return statement;
 }
 
+#if 1
 int main(int argc, char* argv) {
 	std::string program_text = get_file_contents_as_text("main.gra");
 
@@ -214,62 +273,86 @@ int main(int argc, char* argv) {
 
 
 	int text_index = 0;
-	int identifier_chars = 0;
+	int last_token_index = 0;
 
 	while (text_index < program_text.size()) {
 
 		bool found_token = false;
 
+		// parse strings
+		char text_char = program_text[text_index];
+		if (text_char == '"') {
+			Token string_literal;
+			string_literal.start_index = text_index;
+			for (int i = text_index + 1; i < program_text.size(); i++) {
+				char next_char = program_text[i];
+				if (next_char == '"') {
+					string_literal.end_index = i + 1;
+					string_literal.type = TokenType::STRING_LITERAL;
+
+					tokens->push_back(string_literal);
+					text_index = i + 1;
+					last_token_index = text_index;
+					found_token = true;
+				}
+			}
+		}
+		if (found_token)continue;
+
+		// parse fixed tokens
 		for (auto const& entry : token_map) {
-			int matched_chars = 0;
-			int start_index = text_index;
 
 			const std::string token_string = entry.first;
+			StringView token_view{&token_string[0], token_string.size()};
+			StringView program_view{&program_text[text_index], token_string.size()};
 
-			for (int i = 0; i < token_string.size(); i++) {
-				char token_char = token_string[matched_chars];
-				char program_char = program_text[start_index + matched_chars];
-				if (token_char == program_char) {
-					matched_chars++;
+			// check if it matches the current token
+			if (token_view == program_view) {
+
+				// if we've had a gap in between tokens, it must be an identifier
+				if (text_index > last_token_index) {
+					Token identifier;
+					identifier.end_index = text_index;
+					identifier.start_index = last_token_index;
+					identifier.type = TokenType::IDENTIFIER;
+					tokens->push_back(identifier);
 				}
-				else {
-					break;
-				}
+
+				Token token;
+				token.start_index = text_index;
+				token.end_index = text_index + token_string.size();
+				token.type = entry.second;
+				tokens->push_back(token);
+
+				text_index += token_string.size();
+				last_token_index = text_index;
+				found_token = true;
+				break;
 			}
-
-			if (matched_chars != token_string.size()) {
-				continue; // try next token
-			}
-
-			if (identifier_chars > 0) {
-				Token identifier;
-				identifier.end_index = text_index;
-				identifier.start_index = text_index - identifier_chars;
-				identifier_chars = 0;
-				identifier.type = TokenType::IDENTIFIER;
-				tokens->push_back(identifier);
-			}
-
-
-			Token token;
-			token.start_index = text_index;
-			token.end_index = text_index + matched_chars;
-			token.type = entry.second;
-			tokens->push_back(token);
-			found_token = true;
-			text_index += matched_chars; // shunt the text index along
-			break;
 		}
+		if (found_token)continue;
 
-		if (!found_token) {
-			identifier_chars++;
-			text_index++;
+		text_index++; // if we havent found a token, just start from the next character
+	}
+
+	for (Token& token : *tokens) {
+		if (token.type == TokenType::IDENTIFIER) {
+			StringView token_string = get_string_view(token, program_text);
+			if (is_number(token_string)) {
+				token.type = TokenType::INT_LITERAL;
+			}
 		}
+	}
+
+	for (Token& token : *tokens) {
+
 	}
 
 	Token end_brace;
 	end_brace.type = TokenType::CLOSE_BRACE;
 	tokens->push_back(end_brace);
+
+	print_tokens(std::cout, *tokens, program_text);
 
 	tokenizer.program_text = program_text;
 	tokenizer.tokens = tokens;
@@ -277,5 +360,12 @@ int main(int argc, char* argv) {
 	SyntaxNode* parse_tree = parse_statement();
 
 	std::cout << "parsing end" << std::endl;
-}
 
+}
+#endif // 0
+
+#ifdef DEBUG
+int main(int argc, char* argv) {
+	comp();
+}
+#endif // DEBUG

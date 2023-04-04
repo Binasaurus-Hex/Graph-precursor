@@ -21,7 +21,11 @@ enum class TokenType {
 	MINUS,
 	FORWARD_ARROW,
 	BACK_ARROW,
-	NUMBER
+
+	// literals
+	STRING_LITERAL,
+	INT_LITERAL,
+	FLOAT_LITERAL
 };
 
 std::string get_token_name(TokenType type) {
@@ -59,8 +63,6 @@ std::string get_token_name(TokenType type) {
 		return "PLUS";
 	case TokenType::MINUS:
 		return "MINUS";
-	case TokenType::NUMBER:
-		return "NUMBER";
 	case TokenType::SEMI_COLON:
 		return "SEMI COLON";
 	default:
