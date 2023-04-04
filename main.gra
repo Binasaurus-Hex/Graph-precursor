@@ -1,0 +1,16 @@
+a:int;
+a = 3;
+
+b:int;
+b = 4;
+
+name:string;
+
+{
+	c:float;
+	c = 4;
+}
+
+print(b,c);
+
+b = 2;
