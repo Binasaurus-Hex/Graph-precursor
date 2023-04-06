@@ -4,6 +4,13 @@
 #include <map>
 
 enum class TokenType {
+
+	//Operators in reverse order of presidence
+	PLUS,
+	MINUS,
+	FORWARD_SLASH,
+	STAR,
+
 	SEMI_COLON,
 	IDENTIFIER,
 	EQUALS,
@@ -17,14 +24,12 @@ enum class TokenType {
 	TAB,
 	OPEN_PARENTHESIS,
 	CLOSE_PARENTHESIS,
-	PLUS,
-	MINUS,
 	FORWARD_ARROW,
 	BACK_ARROW,
 
 	// literals
 	STRING_LITERAL,
-	INT_LITERAL,
+	INTEGER_LITERAL,
 	FLOAT_LITERAL
 };
 
@@ -73,6 +78,7 @@ std::string get_token_name(TokenType type) {
 std::map<const std::string, TokenType> token_map = {
 	{"->", TokenType::FORWARD_ARROW},
 	{"<-", TokenType::BACK_ARROW},
+	{"*", TokenType::STAR},
 	{"+", TokenType::PLUS},
 	{"-", TokenType::MINUS},
 	{"=", TokenType::EQUALS},
@@ -88,6 +94,8 @@ std::map<const std::string, TokenType> token_map = {
 	{")", TokenType::CLOSE_PARENTHESIS},
 	{";", TokenType::SEMI_COLON}
 };
+
+
 
 struct Token {
 	TokenType type;
