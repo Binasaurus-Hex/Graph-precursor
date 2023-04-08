@@ -1,23 +1,7 @@
-
-a: int;
-a = 3 + 4;
-
-billy_name: string;
-billy_name = "billy";
-
-bob_name: string;
-bob_name = "bob";
-
-
-my_proc :: (a: int, b: float){
-
+print_person :: (name: string, age: int){
+	
 }
 
-{
-	age:float;
-	age = 2 + 5 * 3 - 10;
+main :: (){
+	print("hello tommorow, the day is ", 2)
 }
-
-name: string;
-name = 2;
-x = print("format %d, %d", pow(2,3 + 4 * 5), 2 + 3 * 4);

@@ -98,6 +98,8 @@ enum class NodeType {
 	// Literals
 	INTEGER_LITERAL,
 	STRING_LITERAL,
+	FLOAT_LITERAL,
+	BOOLEAN_LITERAL,
 
 	// OPERATORS
 	MULTIPLY,
@@ -105,6 +107,13 @@ enum class NodeType {
 	SUBTRACT,
 	DIVIDE,
 
+	// COMPARISON
+	LESS_THAN,
+	GREATER_THAN,
+	LESS_THAN_EQUAL,
+	GREATER_THAN_EQUAL,
+
+	//
 	PROCEDURE_CALL,
 	PARSE_ERROR,
 	BLOCK,
@@ -114,6 +123,7 @@ enum class NodeType {
 	VARIABLE_DECLERATION,
 	VARIABLE_ASSIGNMENT,
 	PROCEDURE_DECLERATION,
+	PROCEDURE,
 
 	PROCEDURE_HEADER,
 
@@ -165,8 +175,8 @@ struct Tokenizer {
 };
 
 Tokenizer tokenizer;
-SyntaxNode* parse_statement(TokenType termination_type = TokenType::SEMI_COLON);
-SyntaxNode* parse_arguments();
+SyntaxNode* parse_statement();
+SyntaxNode* parse_arguments(bool use_expression = true);
 
 SyntaxNode* identifier_node(Token& identifier_token) {
 	SyntaxNode* identifier_node = new SyntaxNode();
@@ -182,6 +192,16 @@ SyntaxNode* integer_node(Token& integer_token) {
 	std::string token_value = tokenizer.get_identifier_name(integer_token);
 	integer_node->int_value = std::stoi(token_value);
 	return integer_node;
+}
+
+SyntaxNode* float_node(Token& integer_token, Token& fractional_token) {
+	std::string float_string = tokenizer.get_identifier_name(integer_token) + "." + tokenizer.get_identifier_name(fractional_token);
+
+	SyntaxNode* float_node = new SyntaxNode();
+	float_node->type = NodeType::FLOAT_LITERAL;
+
+	float_node->float_value = std::stof(float_string);
+	return float_node;
 }
 
 SyntaxNode* string_node(Token& string_token) {
@@ -202,7 +222,7 @@ SyntaxNode* parse_error() {
 
 SyntaxNode* parse_subexpression() {
 	Token* token = tokenizer.next_token();
-	SyntaxNode* node = parse_error();
+	SyntaxNode* node = new SyntaxNode();
 
 	if (token->type == TokenType::IDENTIFIER) {
 		Token* next_token = tokenizer.peek_next_token();
@@ -219,7 +239,15 @@ SyntaxNode* parse_subexpression() {
 		}
 	}
 	if (token->type == TokenType::INTEGER_LITERAL) {
-		node = integer_node(*token);
+		// check for floats
+		if (tokenizer.peek_next_token()->type == TokenType::DOT) {
+			tokenizer.next_token();
+			Token* fractional = tokenizer.next_token();
+			node = float_node(*token, *fractional);
+		}
+		else {
+			node = integer_node(*token);
+		}
 	}
 	if (token->type == TokenType::STRING_LITERAL) {
 		node = string_node(*token);
@@ -257,6 +285,10 @@ SyntaxNode* parse_expression(int priority = -9999) {
 		expression->type = NodeType::SUBTRACT;
 		expression->right = parse_expression();
 	}
+	if (next_token->type == TokenType::FORWARD_SLASH) {
+		expression->type = NodeType::DIVIDE;
+		expression->right = parse_expression();
+	}
 	return expression;
 }
 
@@ -268,11 +300,21 @@ SyntaxNode* parse_block() {
 	while (true) {
 		Token* next_token = tokenizer.peek_next_token();
 		if (next_token->type == TokenType::CLOSE_BRACE) {
-			tokenizer.next_token(); // eat the close brace
 			break;
 		}
+		else if (next_token->type == TokenType::OPEN_BRACE) {
+			tokenizer.next_token(); // eat the open brace
+			current_node->left = parse_block();
+			tokenizer.next_token(); // eat the ending brace
+		}
+		else {
+			current_node->left = parse_statement();
+			next_token = tokenizer.next_token();
+			if (next_token->type != TokenType::SEMI_COLON && next_token->type != TokenType::CLOSE_BRACE) {
+				current_node->left = parse_error();
+			}
+		}
 
-		current_node->left = parse_statement();
 		SyntaxNode* sequence = new SyntaxNode();
 		sequence->type = NodeType::SEQUENCE;
 		current_node->right = sequence;
@@ -281,7 +323,7 @@ SyntaxNode* parse_block() {
 	return node;
 }
 
-SyntaxNode* parse_arguments() {
+SyntaxNode* parse_arguments(bool use_expression) {
 	SyntaxNode* node = new SyntaxNode();
 	node->type = NodeType::SEQUENCE;
 
@@ -293,7 +335,12 @@ SyntaxNode* parse_arguments() {
 
 	SyntaxNode* current_node = node;
 	while (true) {
-		current_node->left = parse_expression();
+		if (use_expression) {
+			current_node->left = parse_expression();
+		}
+		else {
+			current_node->left = parse_statement();
+		}
 		next_token = tokenizer.next_token();
 		current_node->right = new SyntaxNode();
 		current_node->right->type = NodeType::SEQUENCE;
@@ -316,7 +363,7 @@ SyntaxNode* parse_procedure() {
 	}
 
 	SyntaxNode* procedure = new SyntaxNode();
-	procedure->type = NodeType::PROCEDURE_DECLERATION;
+	procedure->type = NodeType::PROCEDURE;
 
 	// parse header
 	SyntaxNode* header = new SyntaxNode();
@@ -324,9 +371,9 @@ SyntaxNode* parse_procedure() {
 	procedure->left = header;
 
 	// parse input
-	while(true){
-		break;
-	}
+	header->left = parse_arguments(false);
+	tokenizer.next_token(); // could change 
+	procedure->right = parse_block();
 
 	// parse output
 
@@ -334,11 +381,9 @@ SyntaxNode* parse_procedure() {
 	return procedure;
 }
 
-SyntaxNode* parse_statement(TokenType termination_type) {
+SyntaxNode* parse_statement() {
 	Token& start_token = *(tokenizer.next_token());
-	if (start_token.type == TokenType::OPEN_BRACE) {
-		return parse_block();
-	}
+
 	if (start_token.type != TokenType::IDENTIFIER) {
 		return parse_error();
 	}
@@ -355,6 +400,7 @@ SyntaxNode* parse_statement(TokenType termination_type) {
 			statement->right = identifier_node(*token);
 		}
 		else if (token->type == TokenType::COLON) {
+			statement->type = NodeType::PROCEDURE_DECLERATION;
 			// constant decleration for now we just assume its a function
 			statement->right = parse_procedure();
 			return statement;
@@ -367,11 +413,6 @@ SyntaxNode* parse_statement(TokenType termination_type) {
 	else if(token->type == TokenType::OPEN_PARENTHESIS) {
 		statement->type = NodeType::PROCEDURE_CALL;
 		statement->right = parse_arguments();
-	}
-
-	Token* termination = tokenizer.next_token();
-	if (termination->type != termination_type) {
-		statement->type = NodeType::PARSE_ERROR;
 	}
 
 	return statement;
@@ -394,6 +435,8 @@ std::string node_to_string(SyntaxNode* node) {
 		return "\"" + node->string_value + "\"";
 	case NodeType::INTEGER_LITERAL:
 		return std::to_string(node->int_value);
+	case NodeType::FLOAT_LITERAL:
+		return std::to_string(node->float_value);
 	case NodeType::BLOCK:
 		return "block";
 	case NodeType::SEQUENCE:
@@ -404,12 +447,80 @@ std::string node_to_string(SyntaxNode* node) {
 		return "var assign";
 	case NodeType::PARSE_ERROR:
 		return "ERROR";
+	case NodeType::PROCEDURE_DECLERATION:
+		return "proc decl";
+	case NodeType::PROCEDURE:
+		return "proc";
+	case NodeType::PROCEDURE_HEADER:
+		return "header";
 	default:
 		return "?";
 	}
 }
 
-std::string printBT(const std::string& prefix, SyntaxNode* node, bool isLeft)
+void proc_print(SyntaxNode* arguments) {
+	SyntaxNode* current_node = arguments;
+	while (current_node) {
+		SyntaxNode* value = current_node->left;
+		if (!value)return;
+
+		switch (value->type) {
+		case NodeType::INTEGER_LITERAL:
+			std::cout << value->int_value;
+			break;
+		case NodeType::FLOAT_LITERAL:
+			std::cout << value->float_value;
+		case NodeType::STRING_LITERAL:
+			std::cout << value->string_value;
+		}
+
+		current_node = current_node->right;
+	}
+}
+
+std::map<std::string, SyntaxNode*> procedures;
+
+SyntaxNode* add(SyntaxNode* left, SyntaxNode* right) {
+	if (left->type != right->type)return nullptr;
+
+	NodeType type = left->type;
+
+	SyntaxNode* return_value = new SyntaxNode();
+	switch (type)
+	{
+	case NodeType::INTEGER_LITERAL:
+		return_value->int_value = (left->int_value + right->int_value);
+	case NodeType::STRING_LITERAL:
+		return_value->string_value = (left->string_value + right->string_value);
+	case NodeType::FLOAT_LITERAL:
+		return_value->float_value = (left->float_value + left->float_value);
+	case NodeType::IDENTIFIER:
+		break;
+	default:
+		break;
+	}
+}
+
+void run_tree(SyntaxNode* node) {
+	if (!node)return;
+
+	if (node->type == NodeType::PROCEDURE_DECLERATION) {
+		procedures[node->left->string_value] = node->right;
+	}
+
+	if (node->type == NodeType::PROCEDURE_CALL) {
+		SyntaxNode* name = node->left;
+		SyntaxNode* args = node->right;
+		if (name->string_value == "print") {
+			proc_print(args);
+		}
+	}
+
+	run_tree(node->left);
+	run_tree(node->right);
+}
+
+std::string print_tree(const std::string& prefix, SyntaxNode* node, bool isLeft)
 {
 	if (node != nullptr)
 	{
@@ -422,8 +533,8 @@ std::string printBT(const std::string& prefix, SyntaxNode* node, bool isLeft)
 		output += node_to_string(node) += "\n";
 
 		// enter the next tree level - left and right branch
-		output += printBT(prefix + (isLeft ? "|   " : "    "), node->left, true);
-		output += printBT(prefix + (isLeft ? "|   " : "    "), node->right, false);
+		output += print_tree(prefix + (isLeft ? "|   " : "    "), node->left, true);
+		output += print_tree(prefix + (isLeft ? "|   " : "    "), node->right, false);
 		return output;
 	}
 	return "";
@@ -434,9 +545,11 @@ int main(int argc, char* argv) {
 	std::string program_text = get_file_contents_as_text("main.gra");
 	std::vector<Token> tokens;
 
+	/*
 	Token start_brace;
 	start_brace.type = TokenType::OPEN_BRACE;
 	tokens.push_back(start_brace);
+	*/
 
 
 	int text_index = 0;
@@ -520,10 +633,12 @@ int main(int argc, char* argv) {
 	tokenizer.program_text = program_text;
 	tokenizer.tokens = &tokens;
 	tokenizer.index = 0;
-	SyntaxNode* parse_tree = parse_statement();
+	SyntaxNode* parse_tree = parse_block();
 
-	std::string output = printBT("", parse_tree, false);
+	std::string output = print_tree("", parse_tree, false);
 	std::cout << output << std::endl;
+
+	run_tree(parse_tree);
 }
 #endif // 0
 
