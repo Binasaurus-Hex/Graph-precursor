@@ -85,6 +85,7 @@ std::map<const std::string, TokenType> token_map = {
 	{"*", TokenType::STAR},
 	{"+", TokenType::PLUS},
 	{"-", TokenType::MINUS},
+	{"/", TokenType::FORWARD_SLASH},
 	{"<", TokenType::LESS_THAN},
 	{">", TokenType::GREATER_THAN},
 	{">=", TokenType::GREATER_THAN_EQUAL},

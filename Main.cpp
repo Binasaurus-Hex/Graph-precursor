@@ -4,6 +4,7 @@
 #include "Token.h"
 #include <vector>
 #include <array>
+#include "Parsing.h"
 
 std::string get_file_contents_as_text(const std::string filename) {
 	std::ifstream file_stream(filename);
@@ -93,55 +94,6 @@ void comp() {
 	}
 }
 
-enum class NodeType {
-
-	// Literals
-	INTEGER_LITERAL,
-	STRING_LITERAL,
-	FLOAT_LITERAL,
-	BOOLEAN_LITERAL,
-
-	// OPERATORS
-	MULTIPLY,
-	ADD,
-	SUBTRACT,
-	DIVIDE,
-
-	// COMPARISON
-	LESS_THAN,
-	GREATER_THAN,
-	LESS_THAN_EQUAL,
-	GREATER_THAN_EQUAL,
-
-	//
-	PROCEDURE_CALL,
-	PARSE_ERROR,
-	BLOCK,
-	SEQUENCE,
-
-	// statements
-	VARIABLE_DECLERATION,
-	VARIABLE_ASSIGNMENT,
-	PROCEDURE_DECLERATION,
-	PROCEDURE,
-
-	PROCEDURE_HEADER,
-
-	IDENTIFIER
-};
-
-// PARSING
-struct SyntaxNode {
-	NodeType type;
-	SyntaxNode* left;
-	SyntaxNode* right;
-
-	// literals
-	std::string string_value; // reused for identifier value
-	int int_value;
-	float float_value;
-};
-
 struct Tokenizer {
 	std::vector<Token>* tokens;
 	std::string program_text;
@@ -176,127 +128,106 @@ struct Tokenizer {
 
 Tokenizer tokenizer;
 SyntaxNode* parse_statement();
-SyntaxNode* parse_arguments(bool use_expression = true);
+std::vector<SyntaxNode*> parse_arguments(bool use_expression = true);
 
-SyntaxNode* identifier_node(Token& identifier_token) {
-	SyntaxNode* identifier_node = new SyntaxNode();
-	identifier_node->type = NodeType::IDENTIFIER;
-	identifier_node->string_value = tokenizer.get_identifier_name(identifier_token);
-	return identifier_node;
-}
-
-SyntaxNode* integer_node(Token& integer_token) {
-	SyntaxNode* integer_node = new SyntaxNode();
-	integer_node->type = NodeType::INTEGER_LITERAL;
-
+IntLiteral* integer_node(Token& integer_token) {
+	IntLiteral* integer_node = new IntLiteral();
 	std::string token_value = tokenizer.get_identifier_name(integer_token);
-	integer_node->int_value = std::stoi(token_value);
+	integer_node->value = std::stoi(token_value);
 	return integer_node;
 }
 
 SyntaxNode* float_node(Token& integer_token, Token& fractional_token) {
 	std::string float_string = tokenizer.get_identifier_name(integer_token) + "." + tokenizer.get_identifier_name(fractional_token);
-
-	SyntaxNode* float_node = new SyntaxNode();
-	float_node->type = NodeType::FLOAT_LITERAL;
-
-	float_node->float_value = std::stof(float_string);
+	FloatLiteral* float_node = new FloatLiteral();
+	float_node->value = std::stof(float_string);
 	return float_node;
 }
 
 SyntaxNode* string_node(Token& string_token) {
-	SyntaxNode* string_node = new SyntaxNode();
-	string_node->type = NodeType::STRING_LITERAL;
-
+	StringLiteral* string_node = new StringLiteral();
 	std::string token_value = tokenizer.get_identifier_name(string_token);
-	string_node->string_value = token_value.substr(1, token_value.length() - 2); // remove the quotation marks
-
+	string_node->value = token_value.substr(1, token_value.length() - 2); // remove the quotation marks
 	return string_node;
-}
-
-SyntaxNode* parse_error() {
-	SyntaxNode* error_node = new SyntaxNode();
-	error_node->type = NodeType::PARSE_ERROR;
-	return error_node;
 }
 
 SyntaxNode* parse_subexpression() {
 	Token* token = tokenizer.next_token();
-	SyntaxNode* node = new SyntaxNode();
 
 	if (token->type == TokenType::IDENTIFIER) {
 		Token* next_token = tokenizer.peek_next_token();
 
 		// we have a function call
 		if (next_token->type == TokenType::OPEN_PARENTHESIS) {
-			node->type = NodeType::PROCEDURE_CALL;
-			node->left = identifier_node(*token);
+			ProcedureCall* proc_call = new ProcedureCall();
+			proc_call->name = tokenizer.get_identifier_name(*token);
 			tokenizer.next_token();
-			node->right = parse_arguments();
+			proc_call->inputs = parse_arguments();
+			return proc_call;
 		}
 		else {
-			node = identifier_node(*token);
+			VariableCall* var_call = new VariableCall();
+			var_call->name = tokenizer.get_identifier_name(*token);
+			return var_call;
 		}
 	}
+
 	if (token->type == TokenType::INTEGER_LITERAL) {
 		// check for floats
 		if (tokenizer.peek_next_token()->type == TokenType::DOT) {
 			tokenizer.next_token();
 			Token* fractional = tokenizer.next_token();
-			node = float_node(*token, *fractional);
+			return float_node(*token, *fractional);
 		}
 		else {
-			node = integer_node(*token);
+			return integer_node(*token);
 		}
 	}
 	if (token->type == TokenType::STRING_LITERAL) {
-		node = string_node(*token);
+		return string_node(*token);
 	}
-	return node;
+	return new ParseError("couldn't parse subexpression");
 }
 
 SyntaxNode* parse_expression(int priority = -9999) {
-	SyntaxNode* expression = new SyntaxNode();
 	Token* next_token = tokenizer.peek_next_token();
 
 	// check for termination tokens
 	if(next_token->type == TokenType::SEMI_COLON || next_token->type == TokenType::COMMA || next_token->type == TokenType::CLOSE_PARENTHESIS) {
-		return nullptr;
+		return new ParseError("expression with no value");
 	}
 
-	expression->left = parse_subexpression();
+	SyntaxNode* sub_expression = parse_subexpression();
 	next_token = tokenizer.peek_next_token();
 
 	// check for termination tokens
 	if (next_token->type == TokenType::SEMI_COLON || next_token->type == TokenType::COMMA || next_token->type == TokenType::CLOSE_PARENTHESIS) {
-		return expression->left;
+		return sub_expression;
 	}
 	tokenizer.next_token();
 
+	BinaryOperator* binary_operator = new BinaryOperator();
+	binary_operator->left = sub_expression;
+
 	if (next_token->type == TokenType::PLUS) {
-		expression->type = NodeType::ADD;
-		expression->right = parse_expression();
+		binary_operator->operation = BinaryOperator::Type::ADD;
 	}
 	if (next_token->type == TokenType::STAR) {
-		expression->type = NodeType::MULTIPLY;
-		expression->right = parse_expression();
+		binary_operator->operation = BinaryOperator::Type::MULTIPLY;
 	}
 	if (next_token->type == TokenType::MINUS) {
-		expression->type = NodeType::SUBTRACT;
-		expression->right = parse_expression();
+		binary_operator->operation = BinaryOperator::Type::SUBTRACT;
 	}
 	if (next_token->type == TokenType::FORWARD_SLASH) {
-		expression->type = NodeType::DIVIDE;
-		expression->right = parse_expression();
+		binary_operator->operation = BinaryOperator::Type::DIVIDE;
 	}
-	return expression;
+	binary_operator->right = parse_expression();
+	return binary_operator;
 }
 
-SyntaxNode* parse_block() {
-	SyntaxNode* node = new SyntaxNode();
-	node->type = NodeType::BLOCK;
+Block* parse_block() {
+	Block* block = new Block();
 
-	SyntaxNode* current_node = node;
 	while (true) {
 		Token* next_token = tokenizer.peek_next_token();
 		if (next_token->type == TokenType::CLOSE_BRACE) {
@@ -304,256 +235,244 @@ SyntaxNode* parse_block() {
 		}
 		else if (next_token->type == TokenType::OPEN_BRACE) {
 			tokenizer.next_token(); // eat the open brace
-			current_node->left = parse_block();
+			block->statements.push_back(parse_block());
 			tokenizer.next_token(); // eat the ending brace
 		}
 		else {
-			current_node->left = parse_statement();
+			block->statements.push_back(parse_statement());
 			next_token = tokenizer.next_token();
 			if (next_token->type != TokenType::SEMI_COLON && next_token->type != TokenType::CLOSE_BRACE) {
-				current_node->left = parse_error();
+				block->statements.push_back(new ParseError("missing semi colon"));
 			}
 		}
-
-		SyntaxNode* sequence = new SyntaxNode();
-		sequence->type = NodeType::SEQUENCE;
-		current_node->right = sequence;
-		current_node = sequence;
 	}
-	return node;
+	return block;
 }
 
-SyntaxNode* parse_arguments(bool use_expression) {
-	SyntaxNode* node = new SyntaxNode();
-	node->type = NodeType::SEQUENCE;
+std::vector<SyntaxNode*> parse_arguments(bool use_expression) {
+	std::vector<SyntaxNode*> arguments;
 
 	Token* next_token = tokenizer.peek_next_token(); // check quickly for immediate close
 	if (next_token->type == TokenType::CLOSE_PARENTHESIS) {
 		tokenizer.next_token();
-		return node;
+		return arguments;	
 	}
 
-	SyntaxNode* current_node = node;
 	while (true) {
 		if (use_expression) {
-			current_node->left = parse_expression();
+			arguments.push_back(parse_expression());
 		}
 		else {
-			current_node->left = parse_statement();
+			arguments.push_back(parse_statement());
 		}
+
 		next_token = tokenizer.next_token();
-		current_node->right = new SyntaxNode();
-		current_node->right->type = NodeType::SEQUENCE;
 
 		if (next_token->type == TokenType::CLOSE_PARENTHESIS) {
 			break;
 		}
 		else if (next_token->type != TokenType::COMMA) {
-			return parse_error(); // if its not a closed parenthesis
+			arguments.push_back(new ParseError("no comma")); // if its not a closed parenthesis
 		}
-		current_node = current_node->right;
 	}
-	return node;
+	return arguments;
 }
 
-SyntaxNode* parse_procedure() {
+Procedure* parse_procedure() {
 	Token* open_parenthesis = tokenizer.next_token();
 	if (open_parenthesis->type != TokenType::OPEN_PARENTHESIS) {
-		return parse_error();
+		std::cout << "no open parenthesis ?? wtf" << std::endl;
+		return nullptr;
 	}
 
-	SyntaxNode* procedure = new SyntaxNode();
-	procedure->type = NodeType::PROCEDURE;
-
-	// parse header
-	SyntaxNode* header = new SyntaxNode();
-	header->type = NodeType::PROCEDURE_HEADER;
-	procedure->left = header;
+	Procedure* procedure = new Procedure();
 
 	// parse input
-	header->left = parse_arguments(false);
+	procedure->inputs = parse_arguments(false);
 	tokenizer.next_token(); // could change 
-	procedure->right = parse_block();
-
-	// parse output
-
-	// parse body
+	// eventually parse return type in here
+	procedure->body = parse_block();
 	return procedure;
 }
 
 SyntaxNode* parse_statement() {
-	Token& start_token = *(tokenizer.next_token());
+	Token* start_token = tokenizer.next_token();
 
-	if (start_token.type != TokenType::IDENTIFIER) {
-		return parse_error();
+	if (start_token->type == TokenType::BACK_ARROW) {
+		// parse return statement
+		ReturnStatement* return_statement = new ReturnStatement();
+		return_statement->expression = parse_expression();
+		return return_statement;
 	}
 
-	SyntaxNode* statement = new SyntaxNode();
-	statement->left = identifier_node(start_token);
+	if (start_token->type != TokenType::IDENTIFIER) {
+		return new ParseError("statement doesnt start with an identifier");
+	}
+
+	std::string identifier = tokenizer.get_identifier_name(*start_token);
 
 	Token* token = tokenizer.next_token();
 	if (token->type == TokenType::COLON) {
-		statement->type = NodeType::VARIABLE_DECLERATION;
-
 		token = tokenizer.next_token();
+
 		if (token->type == TokenType::IDENTIFIER) {
-			statement->right = identifier_node(*token);
+			VariableDecleration* variable_decleration = new VariableDecleration();
+			variable_decleration->name = identifier;
+			variable_decleration->type_name = tokenizer.get_identifier_name(*token);
+			return variable_decleration;
 		}
 		else if (token->type == TokenType::COLON) {
-			statement->type = NodeType::PROCEDURE_DECLERATION;
+			ProcedureDecleration* procedure_decleration = new ProcedureDecleration();
 			// constant decleration for now we just assume its a function
-			statement->right = parse_procedure();
-			return statement;
+			procedure_decleration->name = identifier;
+			procedure_decleration->procedure = parse_procedure();
+			return procedure_decleration;
 		}
 	}
 	else if (token->type == TokenType::EQUALS) {
-		statement->type = NodeType::VARIABLE_ASSIGNMENT;
-		statement->right = parse_expression();
+		VariableAssignment* variable_assignment = new VariableAssignment();
+		variable_assignment->name = identifier;
+		variable_assignment->value = parse_expression();
+		return variable_assignment;
 	}
-	else if(token->type == TokenType::OPEN_PARENTHESIS) {
-		statement->type = NodeType::PROCEDURE_CALL;
-		statement->right = parse_arguments();
+	else if (token->type == TokenType::OPEN_PARENTHESIS) {
+		ProcedureCall* procedure_call = new ProcedureCall();
+		procedure_call->name = identifier;
+		procedure_call->inputs = parse_arguments();
+		return procedure_call;
 	}
-
-	return statement;
+	return nullptr;
 }
 
-std::string node_to_string(SyntaxNode* node) {
+SyntaxNode* evaluate_block(Block* block);
+
+
+std::map<std::string, Procedure*> procedures;
+std::map<std::string, SyntaxNode*> variables;
+
+SyntaxNode* evaluate_node(SyntaxNode* node) {
 	switch (node->type)
 	{
-	case NodeType::MULTIPLY:
-		return "*";
-	case NodeType::ADD:
-		return "+";
-	case NodeType::SUBTRACT:
-		return "-";
-	case NodeType::PROCEDURE_CALL:
-		return "proc call";
-	case NodeType::IDENTIFIER:
-		return node->string_value;
-	case NodeType::STRING_LITERAL:
-		return "\"" + node->string_value + "\"";
-	case NodeType::INTEGER_LITERAL:
-		return std::to_string(node->int_value);
-	case NodeType::FLOAT_LITERAL:
-		return std::to_string(node->float_value);
-	case NodeType::BLOCK:
-		return "block";
-	case NodeType::SEQUENCE:
-		return " ";
-	case NodeType::VARIABLE_DECLERATION:
-		return "var decl";
-	case NodeType::VARIABLE_ASSIGNMENT:
-		return "var assign";
-	case NodeType::PARSE_ERROR:
-		return "ERROR";
-	case NodeType::PROCEDURE_DECLERATION:
-		return "proc decl";
-	case NodeType::PROCEDURE:
-		return "proc";
-	case NodeType::PROCEDURE_HEADER:
-		return "header";
-	default:
-		return "?";
-	}
-}
+	case SyntaxNode::Type::INTEGER_LITERAL:
+	case SyntaxNode::Type::FLOAT_LITERAL:
+	case SyntaxNode::Type::STRING_LITERAL:
+	case SyntaxNode::Type::BOOLEAN_LITERAL:
+		return node;
 
-void proc_print(SyntaxNode* arguments) {
-	SyntaxNode* current_node = arguments;
-	while (current_node) {
-		SyntaxNode* value = current_node->left;
-		if (!value)return;
-
-		switch (value->type) {
-		case NodeType::INTEGER_LITERAL:
-			std::cout << value->int_value;
-			break;
-		case NodeType::FLOAT_LITERAL:
-			std::cout << value->float_value;
-		case NodeType::STRING_LITERAL:
-			std::cout << value->string_value;
-		}
-
-		current_node = current_node->right;
-	}
-}
-
-std::map<std::string, SyntaxNode*> procedures;
-
-SyntaxNode* add(SyntaxNode* left, SyntaxNode* right) {
-	if (left->type != right->type)return nullptr;
-
-	NodeType type = left->type;
-
-	SyntaxNode* return_value = new SyntaxNode();
-	switch (type)
+	case SyntaxNode::Type::BLOCK:
 	{
-	case NodeType::INTEGER_LITERAL:
-		return_value->int_value = (left->int_value + right->int_value);
-	case NodeType::STRING_LITERAL:
-		return_value->string_value = (left->string_value + right->string_value);
-	case NodeType::FLOAT_LITERAL:
-		return_value->float_value = (left->float_value + left->float_value);
-	case NodeType::IDENTIFIER:
-		break;
-	default:
-		break;
+		evaluate_block((Block*)node);
 	}
-}
+	break;
 
-void run_tree(SyntaxNode* node) {
-	if (!node)return;
-
-	if (node->type == NodeType::PROCEDURE_DECLERATION) {
-		procedures[node->left->string_value] = node->right;
+	case SyntaxNode::Type::VARIABLE_CALL:
+	{
+		VariableCall* var_call = (VariableCall*)node;
+		return variables[var_call->name];
 	}
+	break;
 
-	if (node->type == NodeType::PROCEDURE_CALL) {
-		SyntaxNode* name = node->left;
-		SyntaxNode* args = node->right;
-		if (name->string_value == "print") {
-			proc_print(args);
+	case SyntaxNode::Type::VARIABLE_DECLERATION:
+	{
+		VariableDecleration* var_decl = (VariableDecleration*)node;
+		variables[var_decl->name] = nullptr;
+	}
+	break;
+
+	case SyntaxNode::Type::PROCEDURE_DECLERATION:
+	{
+		ProcedureDecleration* proc_decl = (ProcedureDecleration*)node;
+		procedures[proc_decl->name] = proc_decl->procedure;
+	}
+	break;
+
+	case SyntaxNode::Type::VARIABLE_ASSIGNMENT:
+	{
+		VariableAssignment* var_assign = (VariableAssignment*)node;
+		variables[var_assign->name] = evaluate_node(var_assign->value);
+	}
+	break;
+
+	case SyntaxNode::Type::PROCEDURE_CALL:
+	{
+		ProcedureCall* procedure_call = (ProcedureCall*)node;
+		if (procedure_call->name == "print") {
+			for (auto input : procedure_call->inputs) {
+				SyntaxNode* evaluated = evaluate_node(input);
+				evaluated->print();
+			}
+			return nullptr;
+		}
+		else if (procedure_call->name == "date") {
+			IntLiteral* int_literal = new IntLiteral();
+			int_literal->value = 250;
+			return int_literal;
+		}
+		else {
+			std::cout << "refrenced proc" << std::endl;
 		}
 	}
+	break;
 
-	run_tree(node->left);
-	run_tree(node->right);
-}
-
-std::string print_tree(const std::string& prefix, SyntaxNode* node, bool isLeft)
-{
-	if (node != nullptr)
+	case SyntaxNode::Type::BINARY_OPERATOR:
 	{
-		std::string output = "";
-		output += prefix;
+		BinaryOperator* binary_operator = (BinaryOperator*)node;
+		
+		SyntaxNode* left = evaluate_node(binary_operator->left);
+		SyntaxNode* right = evaluate_node(binary_operator->right);
 
-		output += (isLeft ? "|-  ": "L-  ");
+		if (left->type == SyntaxNode::Type::INTEGER_LITERAL && right->type == SyntaxNode::Type::INTEGER_LITERAL) {
+			
+			IntLiteral* left_int = (IntLiteral*)left;
+			IntLiteral* right_int = (IntLiteral*)right;
 
-		// print the value of the node
-		output += node_to_string(node) += "\n";
-
-		// enter the next tree level - left and right branch
-		output += print_tree(prefix + (isLeft ? "|   " : "    "), node->left, true);
-		output += print_tree(prefix + (isLeft ? "|   " : "    "), node->right, false);
-		return output;
+			IntLiteral* result = new IntLiteral();
+			switch (binary_operator->operation)
+			{
+			case BinaryOperator::Type::ADD:
+				result->value = left_int->value + right_int->value;
+				break;
+			case BinaryOperator::Type::MULTIPLY:
+				result->value = left_int->value * right_int->value;
+				break;
+			case BinaryOperator::Type::SUBTRACT:
+				result->value = left_int->value - right_int->value;
+				break;
+			case BinaryOperator::Type::DIVIDE:
+				result->value = left_int->value / right_int->value;
+				break;
+			default:
+				break;
+			}
+			return result;
+		}
+		
 	}
-	return "";
+	break;
+
+	default:
+		break;
+	}
+	return nullptr;
 }
 
-#if 1
+SyntaxNode* evaluate_block(Block* block) {
+	for (SyntaxNode* statement : block->statements) {
+		evaluate_node(statement);
+	}
+	return nullptr;
+}
+
 int main(int argc, char* argv) {
 	std::string program_text = get_file_contents_as_text("main.gra");
 	std::vector<Token> tokens;
 
-	/*
-	Token start_brace;
-	start_brace.type = TokenType::OPEN_BRACE;
-	tokens.push_back(start_brace);
-	*/
-
-
 	int text_index = 0;
 	int last_token_index = 0;
+
+	for (auto const& entry : token_map) {
+		std::cout << entry.first << std::endl;
+	}
 
 	while (text_index < program_text.size()) {
 
@@ -627,24 +546,14 @@ int main(int argc, char* argv) {
 	end_brace.type = TokenType::CLOSE_BRACE;
 	tokens.push_back(end_brace);
 
-	print_tokens(std::cout, tokens, program_text);
-	std::cout << "\n";
+	
+	// print_tokens(std::cout, tokens, program_text);
+	// std::cout << "\n";
 
 	tokenizer.program_text = program_text;
 	tokenizer.tokens = &tokens;
 	tokenizer.index = 0;
-	SyntaxNode* parse_tree = parse_block();
-
-	std::string output = print_tree("", parse_tree, false);
-	std::cout << output << std::endl;
-
-	run_tree(parse_tree);
+	Block* block = parse_block();
+	evaluate_block(block);
+	evaluate_block(procedures["main"]->body);
 }
-#endif // 0
-
-#if 0
-int main(int argc, char* argv) {
-	TreeBlock block = print_parse_tree(0, true);
-	block.print(std::cout);
-}
-#endif // DEBUG

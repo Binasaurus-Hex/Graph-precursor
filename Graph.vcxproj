@@ -145,6 +145,7 @@
     <None Include="main.gra" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Parsing.h" />
     <ClInclude Include="Token.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

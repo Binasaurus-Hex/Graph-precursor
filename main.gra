@@ -1,7 +1,12 @@
-print_person :: (name: string, age: int){
-	
+x = 3 + 2 * 4;
+name = "bob"; 2nd_name = "dingus";
+x = 5;
+
+increment :: (value: int){
+	<- value + 1;
 }
 
+
 main :: (){
-	print("hello tommorow, the day is ", 2)
+	print("hello my name is ", name, " ", 2nd_name, " and my age is ", x + date());
 }
