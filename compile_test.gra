@@ -1,0 +1,7 @@
+mul :: (a: int, b : int) {
+	<- a * b;
+}
+
+main :: (){
+	<- 3 + mul(2,mul(2,2));
+}

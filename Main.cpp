@@ -5,6 +5,11 @@
 #include <vector>
 #include <array>
 #include "Parsing.h"
+#include <map>
+#include <chrono>
+#include <memory>
+#include <stdexcept>
+#include "CodeGen.h"
 
 std::string get_file_contents_as_text(const std::string filename) {
 	std::ifstream file_stream(filename);
@@ -17,7 +22,7 @@ std::string get_file_contents_as_text(const std::string filename) {
 struct StringView {
 	const char* start;
 	int length;
-
+	
 	bool operator == (StringView& other) {
 		if (length != other.length)return false;
 
@@ -172,6 +177,17 @@ SyntaxNode* parse_subexpression() {
 		}
 	}
 
+	if (token->type == TokenType::TRUE) {
+		BooleanLiteral* bool_literal = new BooleanLiteral();
+		bool_literal->value = true;
+		return bool_literal;
+	}
+	if (token->type == TokenType::FALSE) {
+		BooleanLiteral* bool_literal = new BooleanLiteral();
+		bool_literal->value = false;
+		return bool_literal;
+	}
+
 	if (token->type == TokenType::INTEGER_LITERAL) {
 		// check for floats
 		if (tokenizer.peek_next_token()->type == TokenType::DOT) {
@@ -221,6 +237,16 @@ SyntaxNode* parse_expression(int priority = -9999) {
 	if (next_token->type == TokenType::FORWARD_SLASH) {
 		binary_operator->operation = BinaryOperator::Type::DIVIDE;
 	}
+	if (next_token->type == TokenType::LESS_THAN) {
+		binary_operator->operation = BinaryOperator::Type::LESS_THAN;
+	}
+	if (next_token->type == TokenType::GREATER_THAN) {
+		binary_operator->operation = BinaryOperator::Type::GREATER_THAN;
+	}
+	if (next_token->type == TokenType::DOUBLE_EQUALS) {
+		binary_operator->operation = BinaryOperator::Type::EQUAL;
+	}
+
 	binary_operator->right = parse_expression();
 	return binary_operator;
 }
@@ -305,6 +331,30 @@ SyntaxNode* parse_statement() {
 		return return_statement;
 	}
 
+	if (start_token->type == TokenType::WHILE) {
+		tokenizer.next_token(); // (
+		SyntaxNode* condition = parse_arguments()[0]; // using argument parsing for while argument <- WEIRD HACK
+		tokenizer.next_token(); // {
+		Block* block = parse_block();
+
+		WhileStatement* while_statement = new WhileStatement();
+		while_statement->condition = condition;
+		while_statement->body = block;
+		return while_statement;
+	}
+
+	if (start_token->type == TokenType::IF) {
+		tokenizer.next_token();
+		SyntaxNode* condition = parse_arguments()[0];
+		tokenizer.next_token();
+		Block* block = parse_block();
+
+		IfStatement* if_statement = new IfStatement();
+		if_statement->condition = condition;
+		if_statement->body = block;
+		return if_statement;
+	}
+
 	if (start_token->type != TokenType::IDENTIFIER) {
 		return new ParseError("statement doesnt start with an identifier");
 	}
@@ -344,8 +394,8 @@ SyntaxNode* parse_statement() {
 	return nullptr;
 }
 
-SyntaxNode* evaluate_block(Block* block);
 
+SyntaxNode* evaluate_block(Block* block);
 
 std::map<std::string, Procedure*> procedures;
 std::map<std::string, SyntaxNode*> variables;
@@ -361,7 +411,41 @@ SyntaxNode* evaluate_node(SyntaxNode* node) {
 
 	case SyntaxNode::Type::BLOCK:
 	{
-		evaluate_block((Block*)node);
+		return evaluate_block((Block*)node);
+	}
+	break;
+
+	case SyntaxNode::Type::WHILE_STATEMENT:
+	{
+		WhileStatement* while_statement = (WhileStatement*)node;
+		while (true) {
+			SyntaxNode* condition_eval = evaluate_node(while_statement->condition);
+			if (condition_eval->type != SyntaxNode::Type::BOOLEAN_LITERAL) {
+				std::cout << "while statement condition is not a boolean expression" << std::endl;
+				return nullptr;
+			}
+			BooleanLiteral* boolean_condition = (BooleanLiteral*)condition_eval;
+			if (!boolean_condition->value) {
+				break;
+			}
+
+			evaluate_block(while_statement->body);
+		}
+	}
+	break;
+
+	case SyntaxNode::Type::IF_STATEMENT:
+	{
+		IfStatement* if_statement = (IfStatement*)node;
+		SyntaxNode* condition_eval = evaluate_node(if_statement->condition);
+		if (condition_eval->type != SyntaxNode::Type::BOOLEAN_LITERAL) {
+			std::cout << "if statement condition is not a boolean expression" << std::endl;
+			return nullptr;
+		}
+		BooleanLiteral* boolean_condition = (BooleanLiteral*)condition_eval;
+		if (boolean_condition->value) {
+			evaluate_block(if_statement->body);
+		}
 	}
 	break;
 
@@ -401,15 +485,32 @@ SyntaxNode* evaluate_node(SyntaxNode* node) {
 				SyntaxNode* evaluated = evaluate_node(input);
 				evaluated->print();
 			}
+			std::cout << std::endl;
 			return nullptr;
 		}
-		else if (procedure_call->name == "date") {
+		if (procedure_call->name == "time_nano_seconds") {
+			int time = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 			IntLiteral* int_literal = new IntLiteral();
-			int_literal->value = 250;
+			int_literal->value = time;
 			return int_literal;
 		}
 		else {
-			std::cout << "refrenced proc" << std::endl;
+			Procedure* procedure = procedures[procedure_call->name];
+
+			if (!procedure) {
+				std::cout << "we dont have this procedure!";
+				return nullptr;
+			}
+			
+			// adding variables 
+			for (int i = 0; i < procedure->inputs.size(); i++) {
+				VariableDecleration* input_decl = (VariableDecleration*)procedure->inputs[i];
+				SyntaxNode* input_value = procedure_call->inputs[i];
+				variables[input_decl->name] = evaluate_node(input_value);
+			}
+
+			SyntaxNode* result = evaluate_node(procedure->body);
+			return result;
 		}
 	}
 	break;
@@ -426,25 +527,39 @@ SyntaxNode* evaluate_node(SyntaxNode* node) {
 			IntLiteral* left_int = (IntLiteral*)left;
 			IntLiteral* right_int = (IntLiteral*)right;
 
-			IntLiteral* result = new IntLiteral();
+
+			BooleanLiteral* bool_literal = new BooleanLiteral();
+			IntLiteral* int_literal = new IntLiteral();
+
 			switch (binary_operator->operation)
 			{
 			case BinaryOperator::Type::ADD:
-				result->value = left_int->value + right_int->value;
+				int_literal->value = left_int->value + right_int->value;
 				break;
 			case BinaryOperator::Type::MULTIPLY:
-				result->value = left_int->value * right_int->value;
+				int_literal->value = left_int->value * right_int->value;
 				break;
 			case BinaryOperator::Type::SUBTRACT:
-				result->value = left_int->value - right_int->value;
+				int_literal->value = left_int->value - right_int->value;
 				break;
 			case BinaryOperator::Type::DIVIDE:
-				result->value = left_int->value / right_int->value;
+				int_literal->value = left_int->value / right_int->value;
 				break;
+
+			// BOOLEAN
+			case BinaryOperator::Type::LESS_THAN:
+				bool_literal->value = left_int->value < right_int->value;
+				return bool_literal;
+			case BinaryOperator::Type::GREATER_THAN:
+				bool_literal->value = left_int->value > right_int->value;
+				return bool_literal;
+			case BinaryOperator::Type::EQUAL:
+				bool_literal->value = left_int->value == right_int->value;
+				return bool_literal;
 			default:
 				break;
 			}
-			return result;
+			return int_literal;
 		}
 		
 	}
@@ -458,21 +573,103 @@ SyntaxNode* evaluate_node(SyntaxNode* node) {
 
 SyntaxNode* evaluate_block(Block* block) {
 	for (SyntaxNode* statement : block->statements) {
-		evaluate_node(statement);
+		if (statement->type == SyntaxNode::Type::RETURN_STATEMENT) {
+			ReturnStatement* return_statement = (ReturnStatement*)statement;
+			return evaluate_node(return_statement->expression);
+		}
+		else {
+			evaluate_node(statement);
+		}
 	}
 	return nullptr;
 }
 
-int main(int argc, char* argv) {
-	std::string program_text = get_file_contents_as_text("main.gra");
+int generated_name_counter = 0;
+std::string get_generated_name() {
+	std::string name = string_format("generated_ident_%d", generated_name_counter);
+	generated_name_counter++;
+	return name;
+}
+
+SyntaxNode* generate_link(SyntaxNode* expression, std::vector<SyntaxNode*>& generated_statements){
+	// make into var assign and usage
+	VariableDecleration* decl = new VariableDecleration();
+	decl->name = get_generated_name();
+	decl->type_name = "int";
+	generated_statements.push_back(decl);
+
+	VariableAssignment* assignment = new VariableAssignment();
+	assignment->name = decl->name;
+	assignment->value = expression;
+	generated_statements.push_back(assignment);
+
+	VariableCall* var_call = new VariableCall();
+	var_call->name = decl->name;
+	return var_call;
+}
+
+// returns the new identifier (variable call)
+// appends to list of new statements if necessary
+SyntaxNode* flatten_expression(SyntaxNode* expression, std::vector<SyntaxNode*>& generated_statements, bool top_level = false) {
+	if (expression->type == SyntaxNode::Type::PROCEDURE_CALL) {
+		ProcedureCall* procedure_call = (ProcedureCall*)expression;
+		for (int i = 0; i < procedure_call->inputs.size(); i++) {
+			SyntaxNode* input_expression = procedure_call->inputs[i];
+			input_expression = flatten_expression(input_expression, generated_statements);
+			if (!is_literal(input_expression)) {
+				input_expression = generate_link(input_expression, generated_statements);
+			}
+			procedure_call->inputs[i] = input_expression;
+		}
+		if (top_level) {
+			return procedure_call;
+		}
+		return generate_link(procedure_call, generated_statements);
+	}
+
+	if (expression->type == SyntaxNode::Type::BINARY_OPERATOR) {
+		BinaryOperator* binary_operator = (BinaryOperator*)expression;
+		binary_operator->left = flatten_expression(binary_operator->left, generated_statements);
+		binary_operator->right = flatten_expression(binary_operator->right, generated_statements);
+	}
+	return expression;
+}
+
+void flatten(Block* block) {
+	std::vector<SyntaxNode*> modified_statements;
+	for (int i = 0; i < block->statements.size(); i++) {
+
+		SyntaxNode* statement = block->statements[i];
+		if (statement->type == SyntaxNode::Type::VARIABLE_ASSIGNMENT) {
+			VariableAssignment* assignment = (VariableAssignment*)statement;
+
+			assignment->value = flatten_expression(assignment->value, modified_statements, true);
+		}
+		if (statement->type == SyntaxNode::Type::RETURN_STATEMENT) {
+			ReturnStatement* return_statement = (ReturnStatement*)statement;
+			return_statement->expression = flatten_expression(return_statement->expression, modified_statements, true);
+		}
+		if (statement->type == SyntaxNode::Type::PROCEDURE_DECLERATION) {
+			ProcedureDecleration* proc_decl = (ProcedureDecleration*)statement;
+			flatten(proc_decl->procedure->body);
+		}
+		modified_statements.push_back(statement);
+	}
+	block->statements = modified_statements;
+	std::cout << "flattened" << std::endl;
+}
+
+extern "C" int SomeFunction();
+
+#if 1
+int main(int argc, char** argv) {
+	char* program_file = argv[1];
+
+	std::string program_text = get_file_contents_as_text(program_file);
 	std::vector<Token> tokens;
 
 	int text_index = 0;
 	int last_token_index = 0;
-
-	for (auto const& entry : token_map) {
-		std::cout << entry.first << std::endl;
-	}
 
 	while (text_index < program_text.size()) {
 
@@ -498,6 +695,28 @@ int main(int argc, char* argv) {
 			}
 		}
 		if (found_token)continue;
+
+	
+		// parse comments
+		if (text_char == '/' && (text_index + 1) < program_text.size() && program_text[text_index + 1] == '/') {
+			Token comment;
+			comment.start_index = text_index;
+			for (int i = text_index + 2; i < program_text.size(); i++) {
+				char next_char = program_text[i];
+				if (next_char == '\n') {
+					comment.end_index = i + 1;
+					comment.type = TokenType::COMMENT;
+
+					tokens.push_back(comment);
+					text_index = i + 1;
+					last_token_index = text_index;
+					found_token = true;
+					break;
+				}
+			}
+		}
+		if (found_token)continue;
+		
 
 		// parse fixed tokens
 		for (auto const& entry : token_map) {
@@ -555,5 +774,17 @@ int main(int argc, char* argv) {
 	tokenizer.index = 0;
 	Block* block = parse_block();
 	evaluate_block(block);
+	flatten(block);
+	// run program
 	evaluate_block(procedures["main"]->body);
+	compile(block);
 }
+#elif 2
+void main() {
+	//std::cout << SomeFunction() << std::endl;
+	//auto start = std::chrono::high_resolution_clock::now().time_since_epoch();
+	SomeFunction();
+	//auto end = std::chrono::high_resolution_clock::now().time_since_epoch();
+	//std::cout << "took " << (end-start).count()/1e9 << " seconds" << std::endl;
+}
+#endif

@@ -23,6 +23,9 @@
     <None Include="main.gra">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="compile_test.gra">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Token.h">
@@ -31,5 +34,16 @@
     <ClInclude Include="Parsing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CodeGen.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="test.asm">
+      <Filter>Source Files</Filter>
+    </MASM>
   </ItemGroup>
 </Project>

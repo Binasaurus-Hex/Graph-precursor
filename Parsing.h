@@ -23,7 +23,10 @@ struct SyntaxNode {
 		VARIABLE_DECLERATION,
 		PROCEDURE_DECLERATION,
 		VARIABLE_ASSIGNMENT,
-		PROCEDURE
+		PROCEDURE,
+
+		WHILE_STATEMENT,
+		IF_STATEMENT
 	};
 
 	SyntaxNode::Type type;
@@ -51,6 +54,15 @@ struct IntLiteral : SyntaxNode {
 
 	IntLiteral() { type = Type::INTEGER_LITERAL; }
 	int value;
+
+	void print() {
+		std::cout << value;
+	}
+};
+
+struct BooleanLiteral : SyntaxNode {
+	BooleanLiteral() { type = Type::BOOLEAN_LITERAL; }
+	bool value;
 
 	void print() {
 		std::cout << value;
@@ -86,6 +98,15 @@ struct StringLiteral : SyntaxNode {
 	}
 };
 
+struct VariableDecleration : SyntaxNode {
+	VariableDecleration() { type = Type::VARIABLE_DECLERATION; }
+	std::string name;
+	std::string type_name;
+	void print() {
+		std::cout << "var decl";
+	}
+};
+
 struct Procedure : SyntaxNode {
 	Procedure() { type = Type::PROCEDURE; }
 	std::vector<SyntaxNode*> inputs;
@@ -101,6 +122,19 @@ struct Procedure : SyntaxNode {
 		std::cout << ")";
 		body->print();
 	}
+};
+
+struct WhileStatement : SyntaxNode {
+	WhileStatement() { type = Type::WHILE_STATEMENT; }
+	SyntaxNode* condition;
+	Block* body;
+	void print() {}
+};
+
+struct IfStatement : SyntaxNode {
+	IfStatement() { type = Type::IF_STATEMENT; }
+	SyntaxNode* condition;
+	Block* body;
 };
 
 struct ProcedureCall : SyntaxNode {
@@ -120,15 +154,6 @@ struct VariableCall : SyntaxNode {
 	std::string name;
 	void print() {
 		std::cout << "var call";
-	}
-};
-
-struct VariableDecleration : SyntaxNode {
-	VariableDecleration() { type = Type::VARIABLE_DECLERATION; }
-	std::string name;
-	std::string type_name;
-	void print() {
-		std::cout << "var decl";
 	}
 };
 
@@ -175,6 +200,7 @@ struct BinaryOperator : SyntaxNode {
 		GREATER_THAN,
 		LESS_THAN_EQUAL,
 		GREATER_THAN_EQUAL,
+		EQUAL
 	};
 
 	BinaryOperator::Type operation;
@@ -215,3 +241,27 @@ struct BinaryOperator : SyntaxNode {
 		right->print();
 	}
 };
+
+bool is_expression(SyntaxNode* node) {
+	if (
+		node->type == SyntaxNode::Type::BINARY_OPERATOR ||
+		node->type == SyntaxNode::Type::PROCEDURE_CALL  ||
+		node->type == SyntaxNode::Type::VARIABLE_CALL
+		) {
+		return true;
+	}
+	return false;
+}
+
+
+bool is_literal(SyntaxNode* node) {
+	if (
+		node->type == SyntaxNode::Type::INTEGER_LITERAL ||
+		node->type == SyntaxNode::Type::BOOLEAN_LITERAL ||
+		node->type == SyntaxNode::Type::STRING_LITERAL  ||
+		node->type == SyntaxNode::Type::FLOAT_LITERAL
+		) {
+		return true;
+	}
+	return false;
+}

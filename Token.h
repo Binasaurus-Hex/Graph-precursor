@@ -1,7 +1,8 @@
 #pragma once
 
 #include <string>
-#include <map>
+#include <utility>
+#include <vector>
 
 enum class TokenType {
 
@@ -18,6 +19,7 @@ enum class TokenType {
 	SEMI_COLON,
 	IDENTIFIER,
 	EQUALS,
+	DOUBLE_EQUALS,
 	SPACE,
 	COMMA,
 	DOT,
@@ -30,11 +32,18 @@ enum class TokenType {
 	CLOSE_PARENTHESIS,
 	FORWARD_ARROW,
 	BACK_ARROW,
+	WHILE,
+	IF,
+
+	TRUE,
+	FALSE,
 
 	// literals
 	STRING_LITERAL,
 	INTEGER_LITERAL,
-	FLOAT_LITERAL
+	FLOAT_LITERAL,
+
+	COMMENT
 };
 
 std::string get_token_name(TokenType type) {
@@ -77,34 +86,37 @@ std::string get_token_name(TokenType type) {
 	default:
 		break;
 	}
-}
-
-std::map<const std::string, TokenType> token_map = {
-	{"->", TokenType::FORWARD_ARROW},
-	{"<-", TokenType::BACK_ARROW},
-	{"*", TokenType::STAR},
-	{"+", TokenType::PLUS},
-	{"-", TokenType::MINUS},
-	{"/", TokenType::FORWARD_SLASH},
-	{"<", TokenType::LESS_THAN},
-	{">", TokenType::GREATER_THAN},
-	{">=", TokenType::GREATER_THAN_EQUAL},
-	{"<=", TokenType::LESS_THAN_EQUAL},
-	{"=", TokenType::EQUALS},
-	{".", TokenType::DOT},
-	{" ", TokenType::SPACE},
-	{",", TokenType::COMMA},
-	{"{", TokenType::OPEN_BRACE},
-	{"}", TokenType::CLOSE_BRACE},
-	{":", TokenType::COLON},
-	{"\n", TokenType::NEWLINE},
-	{"\t", TokenType::TAB},
-	{"(", TokenType::OPEN_PARENTHESIS},
-	{")", TokenType::CLOSE_PARENTHESIS},
-	{";", TokenType::SEMI_COLON}
 };
 
-
+std::vector<std::pair<const std::string, TokenType>> token_map{
+	std::make_pair("true", TokenType::TRUE),
+	std::make_pair("false", TokenType::FALSE),
+	std::make_pair("while", TokenType::WHILE),
+	std::make_pair("if", TokenType::IF),
+	std::make_pair("->", TokenType::FORWARD_ARROW),
+	std::make_pair("<-", TokenType::BACK_ARROW),
+	std::make_pair("*", TokenType::STAR),
+	std::make_pair("+", TokenType::PLUS),
+	std::make_pair("-", TokenType::MINUS),
+	std::make_pair("/", TokenType::FORWARD_SLASH),
+	std::make_pair("<", TokenType::LESS_THAN),
+	std::make_pair(">", TokenType::GREATER_THAN),
+	std::make_pair(">=", TokenType::GREATER_THAN_EQUAL),
+	std::make_pair("<=", TokenType::LESS_THAN_EQUAL),
+	std::make_pair("==", TokenType::DOUBLE_EQUALS),
+	std::make_pair("=", TokenType::EQUALS),
+	std::make_pair(".", TokenType::DOT),
+	std::make_pair(" ", TokenType::SPACE),
+	std::make_pair(",", TokenType::COMMA),
+	std::make_pair("{", TokenType::OPEN_BRACE),
+	std::make_pair("}", TokenType::CLOSE_BRACE),
+	std::make_pair(":", TokenType::COLON),
+	std::make_pair("\n", TokenType::NEWLINE),
+	std::make_pair("\t", TokenType::TAB),
+	std::make_pair("(", TokenType::OPEN_PARENTHESIS),
+	std::make_pair(")", TokenType::CLOSE_PARENTHESIS),
+	std::make_pair(";", TokenType::SEMI_COLON)
+};
 
 struct Token {
 	TokenType type;
@@ -113,5 +125,5 @@ struct Token {
 };
 
 bool is_whitespace(Token& token) {
-	return token.type == TokenType::NEWLINE || token.type == TokenType::TAB || token.type == TokenType::SPACE;
-}
+	return token.type == TokenType::NEWLINE || token.type == TokenType::TAB || token.type == TokenType::SPACE || token.type == TokenType::COMMENT;
+};
