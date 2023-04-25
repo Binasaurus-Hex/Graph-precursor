@@ -20,29 +20,24 @@ ret
 main:
 push rbp
 mov rbp, rsp
-sub rsp, 64
+sub rsp, 48
 ; move the inputs to stack adresses
 xor rbx, rbx
-; procedure mul start 
-mov rcx, 2
-
-mov rdx, 2
-
-call mul
-mov rbx, rax
+mov rbx,0
 mov QWORD[rbp - 40],rbx
+.while_head0:
+mov rbx,20000000
+cmp rbx, QWORD[rbp - 40]
+setl al
+cmp al, 0
+jne .while_end0
+xor rbx, rbx
+mov rbx,1
+add rbx, QWORD[rbp - 40]
+mov QWORD[rbp - 40],rbx
+jmp .while_head0
+.while_end0:
 mov rbx,QWORD[rbp - 40]
-mov QWORD[rbp - 48],rbx
-; procedure mul start 
-mov rcx, 2
-
-mov rdx, QWORD[rbp - 48]
-
-call mul
-mov rbx, rax
-mov QWORD[rbp - 56],rbx
-mov rbx,QWORD[rbp - 56]
-add rbx, 3
 mov rax, rbx
 lea rcx, [msg]
 mov rdx, rax

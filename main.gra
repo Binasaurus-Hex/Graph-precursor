@@ -8,25 +8,6 @@ main :: (){
 	}
 	
 	print("what is 2 to the power 4?: ", pow(2, pow(2,2)));
-	add_to_a_million(); // count to a million
-}
-
-add_to_a_million :: (){
-	print("count to a million!");
-	counter: int;
-	counter = 0;
-
-	start_time: int;
-	start_time = time_nano_seconds();
-
-	while(counter < 1000000){
-		counter = counter + 1;
-	}
-
-	end_time: int;
-	end_time = time_nano_seconds();
-
-	print(end_time - start_time);
 }
 
 pow :: (number: int, to_power: int){
@@ -42,10 +23,4 @@ pow :: (number: int, to_power: int){
 	}
 
 	<- result;
-}
-
-dees_nuts :: () {
-	z: int;
-	z = pow(9, pow(2,2)) + 5;
-
 }

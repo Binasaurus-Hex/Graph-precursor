@@ -3,6 +3,7 @@
 #include <functional>
 #include "Parsing.h"
 #include "Utils.h"
+#include <chrono>
 
 typedef std::function<void(std::ofstream&)> writer;
 
@@ -20,16 +21,6 @@ void data_segment(std::ofstream& out) {
 	out <<
 		"segment .data\n"
 		"	msg db \"%d\", 0xd, 0xa, 0\n";
-}
-
-void define_main(std::ofstream& out) {
-	out <<
-		"main:\n"
-		"lea rcx, [msg]\n"
-		"mov rdx, 9\n"
-		"call printf\n"
-		"xor rax, rax\n"
-		"call ExitProcess\n";
 }
 
 void reserve_stack(std::ofstream& out, int bytes) {
@@ -88,6 +79,8 @@ void declare_expression(std::ofstream& out, SyntaxNode* expression, std::map<std
 		declare_expression(out, binary_operator->right, scope);
 
 		std::string operation;
+		std::string comparison_operation;
+
 		switch (binary_operator->operation)
 		{
 		case BinaryOperator::Type::ADD:
@@ -99,6 +92,19 @@ void declare_expression(std::ofstream& out, SyntaxNode* expression, std::map<std
 		case BinaryOperator::Type::SUBTRACT:
 			operation = "sub";
 			break;
+		case BinaryOperator::Type::LESS_THAN:
+			operation = "cmp";
+			comparison_operation = "setl";
+			break;
+		case BinaryOperator::Type::GREATER_THAN:
+			operation = "cmp";
+			comparison_operation = "setg";
+			break;
+		case BinaryOperator::Type::EQUAL:
+			operation = "cmp";
+			comparison_operation = "sete";
+			break;
+
 		default:
 			break;
 		}
@@ -112,11 +118,18 @@ void declare_expression(std::ofstream& out, SyntaxNode* expression, std::map<std
 			out << operation << " " << registers[1] << ", " << scope[var_call->name] << "\n";
 		}
 		if (binary_operator->left->type == SyntaxNode::Type::PROCEDURE_CALL) {
+			// SHOULD NEVER HAPPEN NEED TO CHECK
 			declare_procedure_call(out, (ProcedureCall*)binary_operator->left, scope);
 			out << operation << " " << registers[1] << ", " << registers[0] << "\n";
 		}
+
+		if (comparison_operation.length() > 0) {
+			out << comparison_operation << " " << "al" << "\n";
+		}
 	}
 }
+
+int ident_count = 0;
 
 void declare_block(std::ofstream& out, Block* block, std::map<std::string, std::string>& scope, int& stack_offset) {
 	out << "xor rbx, rbx\n";
@@ -134,7 +147,15 @@ void declare_block(std::ofstream& out, Block* block, std::map<std::string, std::
 		}
 		if (statement->type == SyntaxNode::Type::WHILE_STATEMENT) {
 			WhileStatement* while_statment = (WhileStatement*)statement;
+			int while_id = ident_count++;
+			out << ".while_head"<<while_id<<":\n";
+			declare_expression(out, while_statment->condition, scope);
+			out << "cmp al, 0\n";
+			out << "jne " << ".while_end"<<while_id<<"\n";
+
 			declare_block(out, while_statment->body, scope, stack_offset);
+			out << "jmp " << ".while_head"<<while_id<<"\n";
+			out << ".while_end"<<while_id<<":\n";
 		}
 		if (statement->type == SyntaxNode::Type::RETURN_STATEMENT) {
 			ReturnStatement* return_statement = (ReturnStatement*)statement;
@@ -172,6 +193,7 @@ void declare_procedure(std::ofstream& out, ProcedureDecleration* procedure_decl,
 	declare_block(out, proc->body, sub_scope, stack_offset);
 
 	if (procedure_decl->name == "main") {
+		
 		out << "lea rcx, [msg]\n"
 			<< "mov rdx, rax\n"
 			<< "call printf\n";
@@ -242,5 +264,17 @@ void compile(Block* node) {
 
 	system(compile_command);
 	system(link_command);
+
+
+#if false
+	int start = std::chrono::high_resolution_clock::now().time_since_epoch().count();
 	system("compiled.exe");
+	int end = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+	std::cout << "graph took " << (end - start) / 1e9 << " seconds" << std::endl;
+
+	start = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+	system("python C:/Users/Thewa/AppData/Local/Programs/Python/Python310/speed_test.py");
+	end = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+	std::cout << "python took " << (end - start) / 1e9 << " seconds" << std::endl;
+#endif
 }

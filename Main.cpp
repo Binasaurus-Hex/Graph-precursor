@@ -653,15 +653,16 @@ void flatten(Block* block) {
 			ProcedureDecleration* proc_decl = (ProcedureDecleration*)statement;
 			flatten(proc_decl->procedure->body);
 		}
+		if (statement->type == SyntaxNode::Type::WHILE_STATEMENT) {
+			WhileStatement* while_statement = (WhileStatement*)statement;
+			while_statement->condition = flatten_expression(while_statement->condition, modified_statements);
+			flatten(while_statement->body);
+		}
 		modified_statements.push_back(statement);
 	}
 	block->statements = modified_statements;
-	std::cout << "flattened" << std::endl;
 }
 
-extern "C" int SomeFunction();
-
-#if 1
 int main(int argc, char** argv) {
 	char* program_file = argv[1];
 
@@ -773,18 +774,9 @@ int main(int argc, char** argv) {
 	tokenizer.tokens = &tokens;
 	tokenizer.index = 0;
 	Block* block = parse_block();
-	evaluate_block(block);
+	//evaluate_block(block);
 	flatten(block);
 	// run program
-	evaluate_block(procedures["main"]->body);
+	//evaluate_block(procedures["main"]->body);
 	compile(block);
 }
-#elif 2
-void main() {
-	//std::cout << SomeFunction() << std::endl;
-	//auto start = std::chrono::high_resolution_clock::now().time_since_epoch();
-	SomeFunction();
-	//auto end = std::chrono::high_resolution_clock::now().time_since_epoch();
-	//std::cout << "took " << (end-start).count()/1e9 << " seconds" << std::endl;
-}
-#endif
