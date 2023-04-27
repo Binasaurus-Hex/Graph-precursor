@@ -35,4 +35,16 @@ pow :: (number: int, to_power: int){
   
   <- result;
 }
+
+main :: (){
+  a: int;
+  a = 2;
+  
+  b: int;
+  b = 5;
+  
+  printf("%d to the power %d is %d", a, b, pow(a,b));
+  <- 0;
+}
 ```
+output : `2 to the power 5 is 32`
