@@ -86,7 +86,7 @@ void declare_expression(std::ofstream& out, SyntaxNode* expression, std::map<std
 
 	if (expression->type == SyntaxNode::Type::BINARY_OPERATOR) {
 		BinaryOperator* binary_operator = (BinaryOperator*)expression;
-		declare_expression(out, binary_operator->right, scope);
+		declare_expression(out, binary_operator->left, scope);
 
 		std::string operation;
 		std::string comparison_operation;
@@ -119,17 +119,17 @@ void declare_expression(std::ofstream& out, SyntaxNode* expression, std::map<std
 			break;
 		}
 
-		if (binary_operator->left->type == SyntaxNode::Type::INTEGER_LITERAL) {
-			IntLiteral* int_literal = (IntLiteral*)binary_operator->left;
+		if (binary_operator->right->type == SyntaxNode::Type::INTEGER_LITERAL) {
+			IntLiteral* int_literal = (IntLiteral*)binary_operator->right;
 			out << operation << " " << registers[1] << ", " << int_literal->value << "\n";
 		}
-		if (binary_operator->left->type == SyntaxNode::Type::VARIABLE_CALL) {
-			VariableCall* var_call = (VariableCall*)binary_operator->left;
+		if (binary_operator->right->type == SyntaxNode::Type::VARIABLE_CALL) {
+			VariableCall* var_call = (VariableCall*)binary_operator->right;
 			out << operation << " " << registers[1] << ", " << scope[var_call->name] << "\n";
 		}
-		if (binary_operator->left->type == SyntaxNode::Type::PROCEDURE_CALL) {
+		if (binary_operator->right->type == SyntaxNode::Type::PROCEDURE_CALL) {
 			// SHOULD NEVER HAPPEN NEED TO CHECK
-			declare_procedure_call(out, (ProcedureCall*)binary_operator->left, scope);
+			declare_procedure_call(out, (ProcedureCall*)binary_operator->right, scope);
 			out << operation << " " << registers[1] << ", " << registers[0] << "\n";
 		}
 

@@ -199,6 +199,17 @@ SyntaxNode* parse_subexpression() {
 			return integer_node(*token);
 		}
 	}
+
+	if (token->type == TokenType::MINUS) {
+		std::cout << "sub expression minus" << std::endl;
+		SyntaxNode* sub_expression = parse_subexpression();
+		if (sub_expression->type == SyntaxNode::Type::INTEGER_LITERAL) {
+			IntLiteral* int_literal = (IntLiteral*)sub_expression;
+			int_literal->value *= -1;
+			return int_literal;
+		}
+	}
+
 	if (token->type == TokenType::STRING_LITERAL) {
 		return string_node(*token);
 	}
@@ -220,6 +231,7 @@ SyntaxNode* parse_expression(int priority = -9999) {
 	if (next_token->type == TokenType::SEMI_COLON || next_token->type == TokenType::COMMA || next_token->type == TokenType::CLOSE_PARENTHESIS) {
 		return sub_expression;
 	}
+
 	tokenizer.next_token();
 
 	BinaryOperator* binary_operator = new BinaryOperator();
@@ -631,6 +643,9 @@ SyntaxNode* flatten_expression(SyntaxNode* expression, std::vector<SyntaxNode*>&
 		BinaryOperator* binary_operator = (BinaryOperator*)expression;
 		binary_operator->left = flatten_expression(binary_operator->left, generated_statements);
 		binary_operator->right = flatten_expression(binary_operator->right, generated_statements);
+		if (!top_level) {
+			return generate_link(binary_operator, generated_statements);
+		}
 	}
 	return expression;
 }
