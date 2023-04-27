@@ -8,7 +8,7 @@ The compiler is in very early stage development and is missing many basic featur
 
 ## Examples
 ### hello world
-```
+```c++
 main :: (){
   printf("hello world");
   <- 0;
@@ -16,7 +16,7 @@ main :: (){
 ```
 
 ### pow function
-```
+```c++
 pow :: (number: int, to_power: int){
   if(to_power == 0){
     <- 1;
