@@ -658,6 +658,9 @@ void flatten(Block* block) {
 			while_statement->condition = flatten_expression(while_statement->condition, modified_statements);
 			flatten(while_statement->body);
 		}
+		if (statement->type == SyntaxNode::Type::PROCEDURE_CALL) {
+			flatten_expression(statement, modified_statements, true);
+		}
 		modified_statements.push_back(statement);
 	}
 	block->statements = modified_statements;
@@ -665,6 +668,14 @@ void flatten(Block* block) {
 
 int main(int argc, char** argv) {
 	char* program_file = argv[1];
+	
+	bool run = false;
+	if (argc > 2) {
+		std::string run_arg = argv[2];
+		if (run_arg == "-run") {
+			run = true;
+		}
+	}
 
 	std::string program_text = get_file_contents_as_text(program_file);
 	std::vector<Token> tokens;
@@ -778,5 +789,8 @@ int main(int argc, char** argv) {
 	flatten(block);
 	// run program
 	//evaluate_block(procedures["main"]->body);
-	compile(block);
+	std::string filename = program_file;
+	const std::string extension = ".graph";
+	filename = filename.substr(0, filename.size() - extension.size());
+	compile(block, filename, run);
 }

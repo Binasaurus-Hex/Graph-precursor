@@ -143,7 +143,7 @@
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="compile_test.gra" />
+    <None Include="compile_test.graph" />
     <None Include="main.gra" />
   </ItemGroup>
   <ItemGroup>

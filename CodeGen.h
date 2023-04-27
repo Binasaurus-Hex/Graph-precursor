@@ -14,13 +14,19 @@ void program_header(std::ofstream& out) {
 		"segment .text\n"
 		"global main\n"
 		"extern ExitProcess\n"
-		"extern printf\n";
+		"extern printf\n"
+		"extern _CRT_INIT\n";
 }
 
+std::vector<StringLiteral*> strings;
 void data_segment(std::ofstream& out) {
 	out <<
-		"segment .data\n"
-		"	msg db \"%d\", 0xd, 0xa, 0\n";
+		"segment .data\n";
+	out << "msg" << " db \"%d\", 0xd, 0xa, 0\n";
+
+	for (int i = 0; i < strings.size(); i++) {
+		out << "string_id" << i << " db \"" << strings[i]->value << "\", 0xd, 0xa, 0\n";
+	}
 }
 
 void reserve_stack(std::ofstream& out, int bytes) {
@@ -50,6 +56,10 @@ void declare_procedure_call(std::ofstream& out, ProcedureCall* procedure, std::m
 		if (input->type == SyntaxNode::Type::INTEGER_LITERAL) {
 			IntLiteral* int_literal = (IntLiteral*)input;
 			out << "mov " << input_register << ", " << int_literal->value << "\n";
+		}
+		if (input->type == SyntaxNode::Type::STRING_LITERAL) {
+			out << "lea " << input_register << ", " << "[string_id" << strings.size() << "]\n";
+			strings.push_back((StringLiteral*)input);
 		}
 		out << "\n";
 	}
@@ -94,15 +104,15 @@ void declare_expression(std::ofstream& out, SyntaxNode* expression, std::map<std
 			break;
 		case BinaryOperator::Type::LESS_THAN:
 			operation = "cmp";
-			comparison_operation = "setl";
+			comparison_operation = "setle";
 			break;
 		case BinaryOperator::Type::GREATER_THAN:
 			operation = "cmp";
-			comparison_operation = "setg";
+			comparison_operation = "setge";
 			break;
 		case BinaryOperator::Type::EQUAL:
 			operation = "cmp";
-			comparison_operation = "sete";
+			comparison_operation = "setne";
 			break;
 
 		default:
@@ -137,7 +147,7 @@ void declare_block(std::ofstream& out, Block* block, std::map<std::string, std::
 		if (statement->type == SyntaxNode::Type::VARIABLE_DECLERATION) {
 			VariableDecleration* decl = (VariableDecleration*)statement;
 			stack_offset += 8;
-			scope[decl->name] = string_format("QWORD[rbp - %d]", stack_offset);
+			scope[decl->name] = string_format("QWORD [rbp - %d]", stack_offset);
 		}
 		if (statement->type == SyntaxNode::Type::VARIABLE_ASSIGNMENT) {
 			VariableAssignment* assignment = (VariableAssignment*)statement;
@@ -145,6 +155,10 @@ void declare_block(std::ofstream& out, Block* block, std::map<std::string, std::
 			out << "mov " << scope[assignment->name] << "," << registers[1] << "\n"; // rbx is accumilator
 
 		}
+		if (statement->type == SyntaxNode::Type::PROCEDURE_CALL) {
+			declare_procedure_call(out, (ProcedureCall*)statement, scope);
+		}
+
 		if (statement->type == SyntaxNode::Type::WHILE_STATEMENT) {
 			WhileStatement* while_statment = (WhileStatement*)statement;
 			int while_id = ident_count++;
@@ -156,6 +170,15 @@ void declare_block(std::ofstream& out, Block* block, std::map<std::string, std::
 			declare_block(out, while_statment->body, scope, stack_offset);
 			out << "jmp " << ".while_head"<<while_id<<"\n";
 			out << ".while_end"<<while_id<<":\n";
+		}
+		if (statement->type == SyntaxNode::Type::IF_STATEMENT) {
+			IfStatement* if_statement = (IfStatement*)statement;
+			int if_id = ident_count++;
+			declare_expression(out, if_statement->condition, scope);
+			out << "cmp al, 0\n";
+			out << "jne " << ".if_end" << if_id << "\n";
+			declare_block(out, if_statement->body, scope, stack_offset);
+			out << ".if_end" << if_id << ":\n";
 		}
 		if (statement->type == SyntaxNode::Type::RETURN_STATEMENT) {
 			ReturnStatement* return_statement = (ReturnStatement*)statement;
@@ -169,10 +192,14 @@ void declare_procedure(std::ofstream& out, ProcedureDecleration* procedure_decl,
 	out << procedure_decl->name << ":\n";
 
 	int stack_size = calculate_stack_size(procedure_decl->procedure);
-	std::cout << "stack size of " << procedure_decl->name << " is " << stack_size << std::endl;
+	//std::cout << "stack size of " << procedure_decl->name << " is " << stack_size << std::endl;
 	reserve_stack(out, stack_size);
 
 	int stack_offset = 32;
+
+	if (procedure_decl->name == "main") {
+		out << "call    _CRT_INIT\n";
+	}
 
 
 	Procedure* proc = procedure_decl->procedure;
@@ -182,22 +209,15 @@ void declare_procedure(std::ofstream& out, ProcedureDecleration* procedure_decl,
 	int register_offset = 2;
 	for (SyntaxNode* input : proc->inputs) {
 		VariableDecleration* decl = (VariableDecleration*)input;
-		stack_offset -= 8;
+		stack_offset += 8;
 		std::string input_register = registers[register_offset];
 		register_offset++;
-		std::string mem_location = string_format("QWORD[rbp - %d]", stack_offset);
+		std::string mem_location = string_format("QWORD [rbp - %d]", stack_offset);
 		sub_scope[decl->name] = mem_location;
 		out << "mov " << mem_location << ", " << input_register << "\n";
 	}
 
 	declare_block(out, proc->body, sub_scope, stack_offset);
-
-	if (procedure_decl->name == "main") {
-		
-		out << "lea rcx, [msg]\n"
-			<< "mov rdx, rax\n"
-			<< "call printf\n";
-	}
 
 	out <<
 		"leave\n"
@@ -241,11 +261,11 @@ int calculate_stack_size(Procedure* procedure) {
 	int stack_remainder = stack_size % stack_alignment_bytes;
 	if (stack_remainder != 0) stack_multiple += 1;
 
-	return stack_multiple * 16;
+	return (stack_multiple + 1) * 16;
 }
 
-void compile(Block* node) {
-	std::ofstream out("compiled.asm");
+void compile(Block* node, std::string& file_name, bool run) {
+	std::ofstream out(string_format("%s.asm", file_name));
 
 	std::map<std::string, std::string> scope;
 
@@ -259,11 +279,15 @@ void compile(Block* node) {
 	data_segment(out);
 
 	out.close();
-	const char* compile_command = "nasm -f win64 -o compiled.obj compiled.asm";
-	const char* link_command = "link compiled.obj /subsystem:console /out:compiled.exe kernel32.lib legacy_stdio_definitions.lib msvcrt.lib";
+	std::string compile_command = string_format("nasm -f win64 -o %s.obj %s.asm", file_name, file_name);
+	std::string link_command = string_format("link %s.obj /subsystem:console /out:%s.exe kernel32.lib legacy_stdio_definitions.lib msvcrt.lib", file_name, file_name);
 
-	system(compile_command);
-	system(link_command);
+	system(compile_command.c_str());
+	system(link_command.c_str());
+
+	if (run) {
+		system(string_format("%s.exe", file_name).c_str());
+	}
 
 
 #if false

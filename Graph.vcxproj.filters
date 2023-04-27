@@ -23,7 +23,7 @@
     <None Include="main.gra">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="compile_test.gra">
+    <None Include="compile_test.graph">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
