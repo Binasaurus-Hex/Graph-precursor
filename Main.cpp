@@ -670,8 +670,13 @@ void flatten(Block* block) {
 		}
 		if (statement->type == SyntaxNode::Type::WHILE_STATEMENT) {
 			WhileStatement* while_statement = (WhileStatement*)statement;
-			while_statement->condition = flatten_expression(while_statement->condition, modified_statements);
+			while_statement->condition = flatten_expression(while_statement->condition, modified_statements, true);
 			flatten(while_statement->body);
+		}
+		if (statement->type == SyntaxNode::Type::IF_STATEMENT) {
+			IfStatement* if_statement = (IfStatement*)statement;
+			if_statement->condition = flatten_expression(if_statement->condition, modified_statements, true);
+			flatten(if_statement->body);
 		}
 		if (statement->type == SyntaxNode::Type::PROCEDURE_CALL) {
 			flatten_expression(statement, modified_statements, true);

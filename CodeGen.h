@@ -104,15 +104,15 @@ void declare_expression(std::ofstream& out, SyntaxNode* expression, std::map<std
 			break;
 		case BinaryOperator::Type::LESS_THAN:
 			operation = "cmp";
-			comparison_operation = "setle";
+			comparison_operation = "setl";
 			break;
 		case BinaryOperator::Type::GREATER_THAN:
 			operation = "cmp";
-			comparison_operation = "setge";
+			comparison_operation = "setg";
 			break;
 		case BinaryOperator::Type::EQUAL:
 			operation = "cmp";
-			comparison_operation = "setne";
+			comparison_operation = "sete";
 			break;
 
 		default:
@@ -134,7 +134,7 @@ void declare_expression(std::ofstream& out, SyntaxNode* expression, std::map<std
 		}
 
 		if (comparison_operation.length() > 0) {
-			out << comparison_operation << " " << "al" << "\n";
+			out << comparison_operation << " " << "bl" << "\n";
 		}
 	}
 }
@@ -164,7 +164,7 @@ void declare_block(std::ofstream& out, Block* block, std::map<std::string, std::
 			int while_id = ident_count++;
 			out << ".while_head"<<while_id<<":\n";
 			declare_expression(out, while_statment->condition, scope);
-			out << "cmp al, 0\n";
+			out << "cmp bl, 1\n";
 			out << "jne " << ".while_end"<<while_id<<"\n";
 
 			declare_block(out, while_statment->body, scope, stack_offset);
@@ -175,7 +175,7 @@ void declare_block(std::ofstream& out, Block* block, std::map<std::string, std::
 			IfStatement* if_statement = (IfStatement*)statement;
 			int if_id = ident_count++;
 			declare_expression(out, if_statement->condition, scope);
-			out << "cmp al, 0\n";
+			out << "cmp bl, 1\n";
 			out << "jne " << ".if_end" << if_id << "\n";
 			declare_block(out, if_statement->body, scope, stack_offset);
 			out << ".if_end" << if_id << ":\n";
@@ -184,6 +184,8 @@ void declare_block(std::ofstream& out, Block* block, std::map<std::string, std::
 			ReturnStatement* return_statement = (ReturnStatement*)statement;
 			declare_expression(out, return_statement->expression, scope);
 			out << "mov rax, rbx\n";
+			out << "leave\n";
+			out << "ret\n";
 		}
 	}
 }

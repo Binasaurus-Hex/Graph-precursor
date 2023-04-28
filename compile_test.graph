@@ -1,5 +1,31 @@
-main :: (){
-	printf("%d", -2 * 3 + 4 - 9);
+pow :: (number: int, to_power: int){
+  
+  if(to_power == 0){
+    printf("zero");
+    <- 1;
+  }
 
-	<- 0;
+  result: int;
+  result = number;
+  
+  counter: int;
+  counter = 1;
+  
+  while(counter < to_power){
+    result = result * number;
+    counter = counter + 1;
+  }
+  
+  <- result;
+}
+
+main :: (){
+  a: int;
+  a = 3;
+  
+  b: int;
+  b = 0;
+  
+  printf("%d to the power %d is %d", a, b, pow(a,b));
+  <- 0;
 }
